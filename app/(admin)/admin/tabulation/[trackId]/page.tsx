@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { generateExpoExcel } from '@/lib/excel-generator';
 import type { Participant, Judge, Score, Criteria, MatrixRow } from '@/types/expo';
-import { Download, CheckCircle, RefreshCcw, Trash2, X, Lock, Unlock, Clock, BarChart3, Zap } from 'lucide-react';
+import { Download, RefreshCcw, Trash2, X, Unlock, Clock, BarChart3, Zap, Trophy, Medal } from 'lucide-react';
 
 export default function TabulationPage() {
   const supabase = createClient();
@@ -33,7 +33,6 @@ export default function TabulationPage() {
   // 1. Fetch Data
   const fetchData = async () => {
     if (!competitionId) return;
-    // Don't set full loading to true on refresh to keep the UI stable
     if (participants.length === 0) setLoading(true);
     
     try {
@@ -55,18 +54,15 @@ export default function TabulationPage() {
 
   useEffect(() => {
     fetchData();
-
-    // Realtime Subscription
     const channel = supabase
       .channel('tabulation_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scores', filter: `competition_id=eq.${competitionId}` }, 
       () => fetchData())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [competitionId]);
 
-  // 2. Calculation Engine (Variance Removed)
+  // 2. Calculation Engine
   useEffect(() => {
     if (loading || participants.length === 0) return;
 
@@ -102,14 +98,12 @@ export default function TabulationPage() {
       const sum = judgeRawValues.reduce((a, b) => a + b, 0);
       const finalAvg = validJudgeCount > 0 ? sum / validJudgeCount : 0;
       
-      // Removed Variance Calculation here
-
       return {
         participant: team,
         judgeScores: judgeTotals,
         judgeRequests: judgeRequests,
         finalAverage: parseFloat(finalAvg.toFixed(2)),
-        variance: 0, // Placeholder or remove from type definition if possible
+        variance: 0,
       };
     });
 
@@ -120,7 +114,6 @@ export default function TabulationPage() {
   // 3. Handle Actions
   const handleUnlockScore = async () => {
     if (!selectedCell) return;
-    
     const { error } = await supabase
         .from('scores')
         .update({ is_locked: false, unlock_request: false }) 
@@ -137,7 +130,6 @@ export default function TabulationPage() {
   const handleDeleteScore = async () => {
     if (!selectedCell) return;
     if (!confirm(`Permanently delete scores for ${selectedCell.participant.real_name}?`)) return;
-
     const { error } = await supabase
         .from('scores')
         .delete()
@@ -155,7 +147,6 @@ export default function TabulationPage() {
   const handleCellClick = (judge: Judge, participant: Participant, totalScore: number) => {
      let requestActive = false;
      let lockedState = false;
-
      const breakdown = criteria.map(c => {
          const s = scores.find(s => s.judge_id === judge.judge_id && s.participant_id === participant.participant_id && s.criteria_id === c.criteria_id);
          if (s?.unlock_request) requestActive = true;
@@ -173,8 +164,9 @@ export default function TabulationPage() {
     });
   };
 
+  // UPDATED: Now passes all raw data for detailed breakdown
   const handleExport = () => {
-    generateExpoExcel(matrix, judges, criteria, scores, "Competition_Results");
+    generateExpoExcel(matrix, judges, criteria, scores, "Detailed_Results");
   };
 
   if (loading) return (
@@ -187,13 +179,6 @@ export default function TabulationPage() {
   return (
     <div className="h-screen flex flex-col bg-[#050b14] text-white font-sans selection:bg-cyan-500 selection:text-black overflow-hidden relative">
       
-      {/* BACKGROUND EFFECTS */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-         <div className="absolute top-[-20%] left-[20%] w-[40%] h-[40%] bg-cyan-500/10 blur-[100px] rounded-full"></div>
-         <div className="absolute bottom-[-20%] right-[10%] w-[40%] h-[40%] bg-purple-600/10 blur-[100px] rounded-full"></div>
-         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100"></div>
-      </div>
-
       {/* HEADER */}
       <div className="flex-none p-6 bg-[#050b14]/80 backdrop-blur-md border-b border-white/10 z-20 sticky top-0">
         <div className="max-w-[1920px] mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -215,7 +200,7 @@ export default function TabulationPage() {
                   <RefreshCcw size={16} /> Refresh
               </button>
               <button onClick={handleExport} className="group flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all font-bold text-sm uppercase tracking-wider">
-                  <Download size={16} className="group-hover:translate-y-0.5 transition-transform" /> Export Data
+                  <Download size={16} className="group-hover:translate-y-0.5 transition-transform" /> Detailed Export
               </button>
           </div>
         </div>
@@ -238,26 +223,42 @@ export default function TabulationPage() {
                     </div>
                   </th>
                 ))}
-                {/* Variance Removed */}
                 <th className="px-6 py-3 text-right bg-cyan-950/30 text-cyan-400 font-black border-b border-white/10 min-w-[120px] sticky right-0 z-40 backdrop-blur-md">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {matrix.map((row, index) => (
-                <tr key={row.participant.participant_id} className="group hover:bg-white/5 transition-colors">
+                <tr key={row.participant.participant_id} className={`group hover:bg-white/5 transition-colors ${index === 0 ? 'bg-cyan-950/20' : ''}`}>
                   
-                  {/* RANK */}
+                  {/* RANK - Winner Highlights */}
                   <td className="px-4 py-4 font-black text-center sticky left-0 bg-[#050b14] group-hover:bg-[#0f172a] z-30 border-r border-white/5 transition-colors">
-                    <span className={`text-lg ${index < 3 ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'text-slate-600'}`}>
-                        #{index + 1}
-                    </span>
+                    {index === 0 ? (
+                        <div className="flex flex-col items-center animate-in zoom-in duration-500">
+                            <Trophy className="text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.6)]" size={24} />
+                            <span className="text-[10px] text-yellow-400 font-black tracking-widest mt-1">WINNER</span>
+                        </div>
+                    ) : index === 1 ? (
+                        <div className="flex flex-col items-center opacity-80">
+                            <Medal className="text-slate-300" size={20} />
+                            <span className="text-[10px] text-slate-300 font-bold mt-1">2ND</span>
+                        </div>
+                    ) : index === 2 ? (
+                        <div className="flex flex-col items-center opacity-80">
+                            <Medal className="text-amber-700" size={20} />
+                            <span className="text-[10px] text-amber-700 font-bold mt-1">3RD</span>
+                        </div>
+                    ) : (
+                        <span className="text-slate-600 text-lg">#{index + 1}</span>
+                    )}
                   </td>
 
                   {/* TEAM INFO */}
                   <td className="px-6 py-4 sticky left-[80px] bg-[#050b14] group-hover:bg-[#0f172a] z-30 shadow-[4px_0_15px_-5px_rgba(0,0,0,0.5)] border-r border-white/5 transition-colors">
                       <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-bold text-white text-base group-hover:text-cyan-200 transition-colors">{row.participant.real_name}</div>
+                            <div className={`font-bold text-base transition-colors ${index === 0 ? 'text-yellow-400' : 'text-white group-hover:text-cyan-200'}`}>
+                                {row.participant.real_name}
+                            </div>
                             <div className="text-xs text-slate-500 font-mono mt-1 flex items-center gap-2">
                                 <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{row.participant.booth_code}</span>
                                 {row.participant.alias && <span className="text-slate-600">// {row.participant.alias}</span>}
@@ -293,6 +294,7 @@ export default function TabulationPage() {
 
                   {/* FINAL SCORE */}
                   <td className="px-6 py-4 text-right font-black text-2xl bg-[#050b14] group-hover:bg-[#0f172a] text-cyan-400 sticky right-0 z-20 shadow-[-4px_0_15px_-5px_rgba(0,0,0,0.5)] transition-colors border-l border-white/10">
+                    {index === 0 && <span className="text-yellow-400 mr-2 text-sm font-normal align-middle">★</span>}
                     {row.finalAverage}
                   </td>
                 </tr>

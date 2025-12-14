@@ -195,7 +195,6 @@ export default function VotingPage() {
                                 <label className="font-bold text-black text-lg block leading-tight">
                                     {crit.name}
                                 </label>
-                                {/* ---> NEW: Description Display <--- */}
                                 {crit.description && (
                                     <p className="text-slate-500 text-sm mt-1.5 leading-relaxed font-medium">
                                         {crit.description}
@@ -261,14 +260,8 @@ export default function VotingPage() {
                 );
             })}
         </div>
-
-        {/* Helper Note */}
-        {!isReadOnly && (
-            <div className="bg-amber-50 text-amber-900 border border-amber-300 text-sm font-medium p-4 rounded-xl flex gap-3 items-start shadow-sm">
-                <AlertCircle size={20} className="shrink-0 mt-0.5 text-amber-700" />
-                <p>Scores are autosaved locally. You must click <strong className="text-black underline">Submit Final</strong> to finish.</p>
-            </div>
-        )}
+        
+        {/* Note: The 'autosaved locally' banner has been removed here. */}
 
       </div>
 

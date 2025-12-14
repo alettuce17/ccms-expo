@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase';
-import { Trophy, Medal, Crown, Zap, Activity } from 'lucide-react';
+import { Trophy, Medal, Crown, Activity } from 'lucide-react';
 
 // Types
 type RankedTeam = {
-    id: number;
-    displayName: string; 
-    subLabel: string;   
-    score: number;
-    rank: number;
+  id: number;
+  displayName: string; 
+  subLabel: string;   
+  score: number;
+  rank: number;
 };
 
 type Track = {
-    id: number;
-    title: string;
+  id: number;
+  title: string;
 };
 
 export default function ScoreboardPage() {
@@ -30,8 +30,11 @@ export default function ScoreboardPage() {
   useEffect(() => {
     const fetchTracks = async () => {
         // Fetch all tracks regardless of status
-        const { data } = await supabase.from('competitions').select('competition_id, title').order('competition_id');
-        
+        const { data } = await supabase
+        .from('competitions')
+        .select('*')
+        .in('status', ['live', 'ended']) 
+        .order('competition_id', { ascending: false });        
         if (data && data.length > 0) {
             const mapped = data.map(d => ({ 
                 id: d.competition_id, 
@@ -50,7 +53,7 @@ export default function ScoreboardPage() {
     if (!activeTrack) return;
 
     const fetchRankings = async () => {
-        // A. CHECK THE TOGGLE: Fetch the specific track settings to see if names should be revealed
+        // A. CHECK THE TOGGLE
         const { data: trackSettings } = await supabase
             .from('competitions')
             .select('reveal_names')
@@ -59,7 +62,7 @@ export default function ScoreboardPage() {
         
         const showRealNames = trackSettings?.reveal_names || false;
 
-        // B. FETCH DATA: Get all raw data needed for calculation
+        // B. FETCH DATA
         const { data: participants } = await supabase.from('participants').select('*').eq('competition_id', activeTrack.id);
         const { data: scores } = await supabase.from('scores').select('*').eq('competition_id', activeTrack.id);
         const { data: criteria } = await supabase.from('criteria').select('*').eq('competition_id', activeTrack.id);
@@ -83,16 +86,20 @@ export default function ScoreboardPage() {
 
             const finalScore = judgesVoted.size > 0 ? totalAverage / judgesVoted.size : 0;
 
-            // D. APPLY DISPLAY LOGIC
-            // If Admin Toggle is ON -> Show Real Name + Alias
-            // If Admin Toggle is OFF -> Show Alias + Booth Code
+            // D. APPLY DISPLAY LOGIC (UPDATED)
+            // ---------------------------------------------------------
+            // 1. Display Name: Use Real Name OR Alias. 
+            // If Alias is missing, fallback to generic "Entry #" (Never Booth Code)
             const displayName = showRealNames 
                 ? team.real_name 
-                : (team.alias || `Team ${team.booth_code}`);
+                : (team.alias || `Entry #${team.participant_id}`);
 
+            // 2. Sub Label: Only show Alias if we are showing Real Names.
+            // Otherwise show NOTHING (Hidden Booth Code).
             const subLabel = showRealNames 
-                ? (team.alias || team.booth_code) 
-                : team.booth_code;
+                ? (team.alias || "") 
+                : ""; 
+            // ---------------------------------------------------------
 
             return {
                 id: team.participant_id,
@@ -121,7 +128,7 @@ export default function ScoreboardPage() {
   return (
     <div className="min-h-screen bg-[#050b14] text-white p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black overflow-hidden relative">
       
-      {/* Background FX (Matching Landing Page) */}
+      {/* Background FX */}
       <div className="fixed inset-0 z-0 pointer-events-none">
          <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-cyan-500/10 blur-[150px] rounded-full"></div>
          <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-teal-600/10 blur-[150px] rounded-full"></div>
@@ -201,9 +208,12 @@ export default function ScoreboardPage() {
                                 {team.displayName}
                             </h2>
                             <div className="flex items-center gap-2 mt-1">
-                                <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isTop1 ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/50' : 'bg-slate-800 text-slate-500'}`}>
-                                    {team.subLabel}
-                                </span>
+                                {/* Only render subLabel badge if it exists (hidden booth code) */}
+                                {team.subLabel && (
+                                    <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isTop1 ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/50' : 'bg-slate-800 text-slate-500'}`}>
+                                        {team.subLabel}
+                                    </span>
+                                )}
                                 {isTop1 && <span className="text-[10px] uppercase font-bold text-cyan-500 animate-pulse tracking-widest">● Leading</span>}
                             </div>
                         </div>
