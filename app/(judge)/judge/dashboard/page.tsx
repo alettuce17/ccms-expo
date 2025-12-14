@@ -1,3 +1,5 @@
+'/app/%28judge%29/judge/dashboard/page.tsx'
+
 'use client';
 
 import { useEffect, useState } from 'react';

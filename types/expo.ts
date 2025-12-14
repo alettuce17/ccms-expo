@@ -27,6 +27,7 @@ export interface Criteria {
   name: string;
   weight_percentage: number;
   type?: 'slider' | 'likert';
+  description?: string; // <--- ADDED THIS FIELD
 }
 
 export interface Score {

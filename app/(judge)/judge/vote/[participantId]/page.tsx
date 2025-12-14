@@ -46,7 +46,7 @@ export default function VotingPage() {
                 setCompetitionStatus(cStatus.status);
             }
 
-            // Fetch Criteria
+            // Fetch Criteria (select * automatically gets 'description')
             const { data: cData } = await supabase
                 .from('criteria')
                 .select('*')
@@ -80,18 +80,14 @@ export default function VotingPage() {
 
   // 2. Handle Score Change
   const handleScoreChange = (criteriaId: number, value: number) => {
-    // Prevent changes if event is not live
     if (competitionStatus !== 'live') return;
-
     const clamped = Math.min(100, Math.max(0, value));
     setVotes(prev => ({ ...prev, [criteriaId]: clamped }));
   };
 
   // Helper for Likert
   const handleLikertChange = (criteriaId: number, scale: number) => {
-    // Prevent changes if event is not live
     if (competitionStatus !== 'live') return;
-
     const score = scale * 20; 
     setVotes(prev => ({ ...prev, [criteriaId]: score }));
   };
@@ -100,14 +96,12 @@ export default function VotingPage() {
   const handleSubmit = async () => {
     if (!participant) return;
     
-    // Strict Status Check
     if (competitionStatus !== 'live') {
         alert("Voting is currently closed for this event.");
         return;
     }
 
     setSubmitting(true);
-
     const storedJudgeId = localStorage.getItem('ccms_judge_id');
 
     if (!storedJudgeId) {
@@ -117,7 +111,6 @@ export default function VotingPage() {
     }
 
     const realJudgeId = parseInt(storedJudgeId);
-
     const payload = criteria.map(crit => ({
         competition_id: participant.competition_id,
         judge_id: realJudgeId,
@@ -126,7 +119,6 @@ export default function VotingPage() {
         score_value: votes[crit.criteria_id] || 0,
     }));
 
-    // Upsert prevents duplicate rows by updating existing ones for the same judge/participant/criteria combo
     const { error } = await supabase
         .from('scores')
         .upsert(payload, { onConflict: 'judge_id, participant_id, criteria_id' });
@@ -150,7 +142,6 @@ export default function VotingPage() {
   const isReadOnly = competitionStatus !== 'live';
 
   return (
-    // FIX: Darker background (slate-100)
     <div className="min-h-screen bg-slate-100 pb-24 text-slate-900">
       
       {/* Top Bar */}
@@ -160,7 +151,6 @@ export default function VotingPage() {
         </button>
         <div className="text-center">
             <h1 className="font-black text-slate-900 text-sm uppercase tracking-wide">Evaluating</h1>
-            {/* FIX: Darker text and border for booth code */}
             <div className="text-xs font-bold font-mono text-slate-900 bg-white border border-slate-400 px-3 py-1 rounded inline-block mt-1">
                 {participant.booth_code}
             </div>
@@ -185,7 +175,6 @@ export default function VotingPage() {
         
         {/* Header Info */}
         <div className="text-center space-y-2 mt-4">
-            {/* FIX: Maximum darkness text */}
             <h2 className="text-3xl font-black text-black leading-tight">
                 {participant.real_name}
             </h2>
@@ -198,19 +187,28 @@ export default function VotingPage() {
                 const currentScore = votes[crit.criteria_id] || 0;
 
                 return (
-                    // FIX: Added border-slate-300 to card
                     <div key={crit.criteria_id} className="bg-white p-5 rounded-2xl shadow-sm border-2 border-slate-300">
-                        <div className="flex justify-between items-end mb-4">
-                            <label className="font-bold text-black text-lg">
-                                {crit.name}
-                            </label>
-                            <span className="text-xs font-bold text-blue-800 bg-blue-100 px-2 py-1 rounded-full border border-blue-200">
-                                {crit.weight_percentage}% Weight
+                        
+                        {/* HEADER: Name & Description */}
+                        <div className="flex justify-between items-start mb-5 gap-3">
+                            <div>
+                                <label className="font-bold text-black text-lg block leading-tight">
+                                    {crit.name}
+                                </label>
+                                {/* ---> NEW: Description Display <--- */}
+                                {crit.description && (
+                                    <p className="text-slate-500 text-sm mt-1.5 leading-relaxed font-medium">
+                                        {crit.description}
+                                    </p>
+                                )}
+                            </div>
+                            <span className="text-xs font-bold text-blue-800 bg-blue-100 px-2 py-1 rounded-full border border-blue-200 shrink-0 mt-0.5">
+                                {crit.weight_percentage}%
                             </span>
                         </div>
 
                         {crit.type === 'likert' ? (
-                            // LIKERT SCALE (High Contrast)
+                            // LIKERT SCALE
                             <div className="flex justify-between gap-2">
                                 {[1, 2, 3, 4, 5].map((scale) => {
                                     const isActive = (currentScore / 20) === scale;
@@ -219,7 +217,6 @@ export default function VotingPage() {
                                             key={scale}
                                             onClick={() => handleLikertChange(crit.criteria_id, scale)}
                                             disabled={isReadOnly}
-                                            // FIX: Stronger borders and darker text for unselected state
                                             className={`flex-1 h-12 rounded-lg font-bold text-xl transition-all border-2 ${
                                                 isActive 
                                                 ? 'bg-blue-700 text-white border-blue-900 shadow-md scale-105' 
@@ -232,7 +229,7 @@ export default function VotingPage() {
                                 })}
                             </div>
                         ) : (
-                            // SLIDER + TYPING (High Contrast)
+                            // SLIDER + TYPING
                             <div className="flex items-center gap-4">
                                 <input 
                                     type="range" 
@@ -244,7 +241,6 @@ export default function VotingPage() {
                                     value={currentScore}
                                     onChange={(e) => handleScoreChange(crit.criteria_id, parseInt(e.target.value) || 0)}
                                 />
-                                {/* FIX: White background, black text, strong border for input */}
                                 <input
                                     type="number"
                                     min="0"
@@ -257,7 +253,6 @@ export default function VotingPage() {
                             </div>
                         )}
 
-                        {/* FIX: Dark labels for range */}
                         <div className="flex justify-between text-xs font-black text-slate-900 mt-2 px-1 uppercase tracking-wide">
                             <span>Poor (0)</span>
                             <span>Excellent (100)</span>

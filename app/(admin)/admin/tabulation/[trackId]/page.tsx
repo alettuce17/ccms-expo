@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { generateExpoExcel } from '@/lib/excel-generator';
 import type { Participant, Judge, Score, Criteria, MatrixRow } from '@/types/expo';
-import { Download, AlertTriangle, CheckCircle, RefreshCcw, Trash2, X, Lock, Unlock, Clock } from 'lucide-react';
+import { Download, CheckCircle, RefreshCcw, Trash2, X, Lock, Unlock, Clock, BarChart3, Zap } from 'lucide-react';
 
 export default function TabulationPage() {
   const supabase = createClient();
@@ -33,6 +33,7 @@ export default function TabulationPage() {
   // 1. Fetch Data
   const fetchData = async () => {
     if (!competitionId) return;
+    // Don't set full loading to true on refresh to keep the UI stable
     if (participants.length === 0) setLoading(true);
     
     try {
@@ -65,14 +66,14 @@ export default function TabulationPage() {
     return () => { supabase.removeChannel(channel); };
   }, [competitionId]);
 
-  // 2. Calculation Engine
+  // 2. Calculation Engine (Variance Removed)
   useEffect(() => {
     if (loading || participants.length === 0) return;
 
     const calculatedMatrix: MatrixRow[] = participants.map((team) => {
       const teamScores = scores.filter((s) => s.participant_id === team.participant_id);
       const judgeTotals: Record<number, number> = {};
-      const judgeRequests: Record<number, boolean> = {}; // Track requests
+      const judgeRequests: Record<number, boolean> = {}; 
       const judgeRawValues: number[] = [];
 
       judges.forEach((judge) => {
@@ -100,16 +101,15 @@ export default function TabulationPage() {
       const validJudgeCount = judgeRawValues.length;
       const sum = judgeRawValues.reduce((a, b) => a + b, 0);
       const finalAvg = validJudgeCount > 0 ? sum / validJudgeCount : 0;
-      const maxScore = Math.max(...judgeRawValues, 0);
-      const minScore = Math.min(...judgeRawValues, 0);
-      const variance = validJudgeCount > 1 ? maxScore - minScore : 0;
+      
+      // Removed Variance Calculation here
 
       return {
         participant: team,
         judgeScores: judgeTotals,
         judgeRequests: judgeRequests,
         finalAverage: parseFloat(finalAvg.toFixed(2)),
-        variance: parseFloat(variance.toFixed(2)),
+        variance: 0, // Placeholder or remove from type definition if possible
       };
     });
 
@@ -121,10 +121,9 @@ export default function TabulationPage() {
   const handleUnlockScore = async () => {
     if (!selectedCell) return;
     
-    // Unlock all criteria scores for this judge/participant
     const { error } = await supabase
         .from('scores')
-        .update({ is_locked: false, unlock_request: false }) // <--- THE UNLOCK LOGIC
+        .update({ is_locked: false, unlock_request: false }) 
         .eq('judge_id', selectedCell.judge.judge_id)
         .eq('participant_id', selectedCell.participant.participant_id);
 
@@ -178,56 +177,96 @@ export default function TabulationPage() {
     generateExpoExcel(matrix, judges, criteria, scores, "Competition_Results");
   };
 
-  if (loading) return <div className="p-10 text-center font-bold text-slate-500">Loading Tabulation Data...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-[#050b14] flex flex-col items-center justify-center text-cyan-500">
+        <div className="animate-spin mb-4"><RefreshCcw size={32} /></div>
+        <div className="font-mono text-sm tracking-widest uppercase">Initializing System...</div>
+    </div>
+  );
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden relative">
+    <div className="h-screen flex flex-col bg-[#050b14] text-white font-sans selection:bg-cyan-500 selection:text-black overflow-hidden relative">
       
+      {/* BACKGROUND EFFECTS */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+         <div className="absolute top-[-20%] left-[20%] w-[40%] h-[40%] bg-cyan-500/10 blur-[100px] rounded-full"></div>
+         <div className="absolute bottom-[-20%] right-[10%] w-[40%] h-[40%] bg-purple-600/10 blur-[100px] rounded-full"></div>
+         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100"></div>
+      </div>
+
       {/* HEADER */}
-      <div className="flex-none p-6 bg-white border-b shadow-sm z-20">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex-none p-6 bg-[#050b14]/80 backdrop-blur-md border-b border-white/10 z-20 sticky top-0">
+        <div className="max-w-[1920px] mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-900">Live Tabulation</h1>
-            <p className="text-slate-500 font-medium">Validation Matrix & Anomaly Detection <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full ml-2 animate-pulse">● LIVE</span></p>
+            <div className="flex items-center gap-3">
+                <BarChart3 className="text-cyan-400" size={28} />
+                <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">LIVE TABULATION</h1>
+            </div>
+            <p className="text-slate-400 font-mono text-xs mt-1 tracking-widest flex items-center gap-2">
+                SYSTEM ACTIVE 
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+            </p>
           </div>
           <div className="flex gap-3">
-              <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 font-bold text-slate-700">
+              <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 border border-white/10 hover:border-cyan-500/50 rounded-lg hover:bg-cyan-500/10 font-bold text-slate-300 hover:text-cyan-400 transition-all text-sm uppercase tracking-wider">
                   <RefreshCcw size={16} /> Refresh
               </button>
-              <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 shadow-sm font-bold">
-                  <Download size={16} /> Export Excel
+              <button onClick={handleExport} className="group flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-lg hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all font-bold text-sm uppercase tracking-wider">
+                  <Download size={16} className="group-hover:translate-y-0.5 transition-transform" /> Export Data
               </button>
           </div>
         </div>
       </div>
 
-      {/* MATRIX TABLE */}
-      <div className="flex-1 overflow-auto p-4 md:p-8">
-        <div className="max-w-max mx-auto border rounded-xl shadow-sm bg-white overflow-hidden relative">
-          <table className="text-sm text-left text-slate-600 border-collapse">
-            <thead className="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0 z-40 shadow-sm">
+      {/* MATRIX TABLE CONTAINER */}
+      <div className="flex-1 overflow-auto p-4 md:p-8 z-10 custom-scrollbar">
+        <div className="max-w-[1920px] mx-auto border border-white/10 rounded-xl shadow-2xl bg-[#0f172a]/40 backdrop-blur-sm overflow-hidden relative">
+          
+          <table className="text-sm text-left border-collapse w-full">
+            <thead className="text-xs text-cyan-400 uppercase bg-[#0f172a] sticky top-0 z-40">
               <tr>
-                <th className="px-4 py-4 sticky left-0 bg-slate-100 z-50 border-b w-[80px] text-center font-black border-r">Rank</th>
-                <th className="px-6 py-4 sticky left-[80px] bg-slate-100 z-50 border-b shadow-[4px_0_5px_-2px_rgba(0,0,0,0.1)] min-w-[250px] font-black border-r">Team Name</th>
+                <th className="px-4 py-4 sticky left-0 bg-[#0f172a] z-50 border-b border-white/10 w-[80px] text-center font-black tracking-widest border-r border-white/5">Rank</th>
+                <th className="px-6 py-4 sticky left-[80px] bg-[#0f172a] z-50 border-b border-white/10 shadow-[4px_0_15px_-5px_rgba(0,0,0,0.5)] min-w-[300px] font-black tracking-widest border-r border-white/5">Team Identifier</th>
                 {judges.map((j) => (
-                  <th key={j.judge_id} className="px-4 py-3 text-center border-b border-r min-w-[140px] whitespace-nowrap bg-slate-100">
-                    <div className="flex flex-col items-center" title={j.name}>
-                        <span className="font-bold text-slate-800 max-w-[120px] truncate">{j.name}</span>
+                  <th key={j.judge_id} className="px-4 py-3 text-center border-b border-white/10 border-r border-white/5 min-w-[140px] whitespace-nowrap bg-[#0f172a]">
+                    <div className="flex flex-col items-center">
+                        <span className="font-bold text-slate-300 max-w-[120px] truncate">{j.name}</span>
+                        <span className="text-[10px] text-slate-600 font-mono mt-0.5">JUDGE ID: {j.judge_id}</span>
                     </div>
                   </th>
                 ))}
-                <th className="px-6 py-3 text-center border-b border-r bg-slate-200 min-w-[100px] font-bold">Variance</th>
-                <th className="px-6 py-3 text-right bg-slate-900 text-white font-bold border-b min-w-[120px] sticky right-0 z-40">Final Score</th>
+                {/* Variance Removed */}
+                <th className="px-6 py-3 text-right bg-cyan-950/30 text-cyan-400 font-black border-b border-white/10 min-w-[120px] sticky right-0 z-40 backdrop-blur-md">Total</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-white/5">
               {matrix.map((row, index) => (
-                <tr key={row.participant.participant_id} className="bg-white border-b hover:bg-blue-50 transition-colors">
-                  <td className="px-4 py-4 font-black text-center sticky left-0 bg-white z-30 border-r">#{index + 1}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900 sticky left-[80px] bg-white z-30 shadow-[4px_0_5px_-2px_rgba(0,0,0,0.1)] border-r">
-                      <div className="whitespace-nowrap">{row.participant.real_name}</div>
-                      <div className="text-xs text-slate-400 font-mono mt-0.5">{row.participant.booth_code}</div>
+                <tr key={row.participant.participant_id} className="group hover:bg-white/5 transition-colors">
+                  
+                  {/* RANK */}
+                  <td className="px-4 py-4 font-black text-center sticky left-0 bg-[#050b14] group-hover:bg-[#0f172a] z-30 border-r border-white/5 transition-colors">
+                    <span className={`text-lg ${index < 3 ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'text-slate-600'}`}>
+                        #{index + 1}
+                    </span>
                   </td>
+
+                  {/* TEAM INFO */}
+                  <td className="px-6 py-4 sticky left-[80px] bg-[#050b14] group-hover:bg-[#0f172a] z-30 shadow-[4px_0_15px_-5px_rgba(0,0,0,0.5)] border-r border-white/5 transition-colors">
+                      <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-white text-base group-hover:text-cyan-200 transition-colors">{row.participant.real_name}</div>
+                            <div className="text-xs text-slate-500 font-mono mt-1 flex items-center gap-2">
+                                <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{row.participant.booth_code}</span>
+                                {row.participant.alias && <span className="text-slate-600">// {row.participant.alias}</span>}
+                            </div>
+                          </div>
+                      </div>
+                  </td>
+
+                  {/* JUDGE SCORES */}
                   {judges.map((j) => {
                     const score = row.judgeScores[j.judge_id];
                     const hasRequest = row.judgeRequests?.[j.judge_id];
@@ -235,30 +274,27 @@ export default function TabulationPage() {
                     return (
                       <td 
                         key={j.judge_id} 
-                        className={`px-4 py-4 text-center border-r border-slate-100 cursor-pointer transition-colors ${hasRequest ? 'bg-amber-100 hover:bg-amber-200' : 'hover:bg-slate-100'}`}
+                        className={`px-4 py-4 text-center border-r border-white/5 cursor-pointer transition-all duration-300 ${hasRequest ? 'bg-amber-900/20 hover:bg-amber-900/40' : 'hover:bg-cyan-500/10'}`}
                         onClick={() => score && handleCellClick(j, row.participant, score)}
                       >
                         {score ? (
-                          <div className="flex items-center justify-center gap-1">
-                              {hasRequest && <Clock size={14} className="text-amber-600 animate-pulse" />}
-                              <span className={`font-mono font-bold text-base ${hasRequest ? 'text-amber-800' : 'text-slate-800'}`}>
+                          <div className="flex items-center justify-center gap-1 relative">
+                              {hasRequest && <Clock size={12} className="text-amber-500 absolute -top-3 -right-2 animate-bounce" />}
+                              <span className={`font-mono font-bold text-lg ${hasRequest ? 'text-amber-400' : 'text-white'}`}>
                                 {score}
                               </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-300 italic">...</span>
+                          <span className="text-xs text-slate-700 font-mono">--</span>
                         )}
                       </td>
                     );
                   })}
-                  <td className="px-6 py-4 text-center border-r bg-slate-50">
-                      {row.variance > 15 ? (
-                          <div className="flex items-center justify-center text-red-600 gap-1 font-bold"><AlertTriangle size={16} />{row.variance}</div>
-                      ) : (
-                          <div className="flex items-center justify-center text-green-600 gap-1 opacity-60 font-medium"><CheckCircle size={16} />{row.variance}</div>
-                      )}
+
+                  {/* FINAL SCORE */}
+                  <td className="px-6 py-4 text-right font-black text-2xl bg-[#050b14] group-hover:bg-[#0f172a] text-cyan-400 sticky right-0 z-20 shadow-[-4px_0_15px_-5px_rgba(0,0,0,0.5)] transition-colors border-l border-white/10">
+                    {row.finalAverage}
                   </td>
-                  <td className="px-6 py-4 text-right font-black text-xl bg-slate-50 text-slate-900 sticky right-0 z-20 shadow-[-4px_0_5px_-2px_rgba(0,0,0,0.1)]">{row.finalAverage}</td>
                 </tr>
               ))}
             </tbody>
@@ -266,58 +302,65 @@ export default function TabulationPage() {
         </div>
       </div>
 
-      {/* ACTION MODAL */}
+      {/* GLASSMORPHIC ACTION MODAL */}
       {selectedCell && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-                  <div className="bg-slate-50 p-4 border-b flex justify-between items-center">
-                      <h3 className="font-bold text-slate-900">Score Audit</h3>
-                      <button onClick={() => setSelectedCell(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="bg-[#0f172a] border border-white/10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] max-w-sm w-full overflow-hidden scale-100 animate-in zoom-in-95 duration-200">
+                  
+                  {/* Modal Header */}
+                  <div className="bg-white/5 p-4 border-b border-white/10 flex justify-between items-center">
+                      <div className="flex items-center gap-2 text-cyan-400">
+                        <Zap size={18} />
+                        <h3 className="font-bold uppercase tracking-wider text-sm">Score Audit Log</h3>
+                      </div>
+                      <button onClick={() => setSelectedCell(null)} className="text-slate-500 hover:text-white transition-colors"><X size={20} /></button>
                   </div>
-                  <div className="p-6 space-y-4">
+
+                  <div className="p-6 space-y-6">
                       
                       {selectedCell.hasRequest && (
-                          <div className="bg-amber-100 border border-amber-300 text-amber-900 p-3 rounded-lg flex items-start gap-2 text-sm font-medium">
-                              <Clock size={18} className="shrink-0 mt-0.5" />
-                              <p>Judge has requested permission to edit this score.</p>
+                          <div className="bg-amber-500/10 border border-amber-500/50 text-amber-200 p-3 rounded-lg flex items-start gap-3 text-xs font-bold uppercase tracking-wide">
+                              <Clock size={18} className="shrink-0 text-amber-500 animate-pulse" />
+                              <p>Judge requests unlock permission.</p>
                           </div>
                       )}
 
-                      <div className="text-center">
-                          <div className="text-xs font-bold text-slate-400 uppercase">Judge</div>
-                          <div className="font-bold text-lg text-slate-900">{selectedCell.judge.name}</div>
+                      <div className="text-center space-y-1">
+                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Judge Identifier</div>
+                          <div className="font-black text-xl text-white">{selectedCell.judge.name}</div>
                       </div>
                       
-                      <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                      {/* Breakdown List */}
+                      <div className="bg-black/30 rounded-xl p-4 space-y-3 border border-white/5">
                           {selectedCell.breakdown.map((b, i) => (
-                              <div key={i} className="flex justify-between text-sm">
-                                  <span className="text-slate-600">{b.name}</span>
-                                  <span className="font-bold text-slate-900">{b.value}</span>
+                              <div key={i} className="flex justify-between text-sm items-center">
+                                  <span className="text-slate-400 font-medium">{b.name}</span>
+                                  <span className="font-mono font-bold text-cyan-300">{b.value}</span>
                               </div>
                           ))}
-                          <div className="border-t pt-2 flex justify-between font-black text-slate-900">
-                              <span>Weighted Total</span>
-                              <span>{selectedCell.scoreTotal}</span>
+                          <div className="border-t border-white/10 pt-3 flex justify-between font-black text-white text-lg">
+                              <span>TOTAL</span>
+                              <span className="text-cyan-400">{selectedCell.scoreTotal}</span>
                           </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 pt-2">
-                          {/* APPROVE BUTTON (Only if Locked or Requested) */}
+                      <div className="grid grid-cols-1 gap-3">
+                          {/* APPROVE BUTTON */}
                           {selectedCell.isLocked && (
                               <button 
                                 onClick={handleUnlockScore}
-                                className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition-all flex items-center justify-center gap-2 shadow-md"
+                                className="w-full bg-cyan-600/20 border border-cyan-500/50 text-cyan-400 py-3 rounded-xl font-bold hover:bg-cyan-500 hover:text-black transition-all flex items-center justify-center gap-2 uppercase text-sm tracking-wider"
                               >
-                                  <Unlock size={18} /> 
-                                  {selectedCell.hasRequest ? "Approve Unlock Request" : "Unlock for Editing"}
+                                  <Unlock size={16} /> 
+                                  {selectedCell.hasRequest ? "Grant Unlock" : "Force Unlock"}
                               </button>
                           )}
 
                           <button 
                             onClick={handleDeleteScore}
-                            className="w-full bg-white text-red-600 py-3 rounded-xl font-bold border border-red-200 hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-red-500/10 border border-red-500/30 text-red-400 py-3 rounded-xl font-bold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-2 uppercase text-sm tracking-wider"
                           >
-                              <Trash2 size={18} /> Delete Score
+                              <Trash2 size={16} /> Delete Entry
                           </button>
                       </div>
                   </div>
