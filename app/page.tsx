@@ -221,12 +221,7 @@ export default function LandingPage() {
           </div>
         )}
         
-        {/* Footer */}
-        <footer className="mt-20 text-center text-slate-600 text-xs font-mono">
-           <p>PRESS CTRL+SHIFT+M FOR ADMIN ACCESS</p>
-           <p className="mt-2 opacity-50">System v2.0 • 2025</p>
-        </footer>
-
+      
       </div>
     </div>
   );
