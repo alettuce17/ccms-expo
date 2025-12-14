@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-// Assuming your client is exported from here. 
-// If it's a named export, use: import { supabase } from '@/lib/supabase';
-import supabase from '@/lib/supabase'; 
+// CORRECTED: Import the named export 'createClient' instead of default
+import { createClient } from '@/lib/supabase'; 
 import { 
   Plus, 
   Trash2, 
@@ -15,6 +14,9 @@ import {
 } from 'lucide-react';
 
 export default function TasksPage() {
+  // Initialize the Supabase client for the browser
+  const supabase = createClient();
+
   const [tasks, setTasks] = useState<any[]>([]);
   const [newTask, setNewTask] = useState('');
   const [loading, setLoading] = useState(true);
