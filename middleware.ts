@@ -1,31 +1,61 @@
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname;
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
-  // 1. Check if the user is trying to access a Judge Route
-  if (path.startsWith('/judge')) {
-    // Extract the Judge ID from the URL (Format: /judge/[judgeId]/...)
-    const pathParts = path.split('/'); // ["", "judge", "123", "dashboard"]
-    const judgeId = pathParts[2];
-
-    // If we have an ID, check for that specific judge's session cookie
-    if (judgeId) {
-      const sessionCookie = request.cookies.get(`ccms-judge-${judgeId}`);
-
-      // If no cookie exists for THIS judge, kick them back to login
-      if (!sessionCookie) {
-        return NextResponse.redirect(new URL('/login', request.url));
-      }
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            request.cookies.set(name, value)
+          );
+          response = NextResponse.next({
+            request,
+          });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
     }
+  );
+
+  // 1. Get the current user
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // 2. Define Protected Routes
+  // If user tries to go to /admin AND is NOT logged in -> Kick to /login
+  if (request.nextUrl.pathname.startsWith('/admin') && !user) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  return NextResponse.next();
+  // 3. Define Judge Routes
+  if (request.nextUrl.pathname.startsWith('/judge') && !user) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  return response;
 }
 
 export const config = {
   matcher: [
-    // Match dynamic judge routes
-    '/judge/:path*',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
