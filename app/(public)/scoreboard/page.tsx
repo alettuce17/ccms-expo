@@ -87,7 +87,7 @@ export default function ScoreboardPage() {
             const rawScore = judgesVoted.size > 0 ? totalAverage / judgesVoted.size : 0;
             
             // MULTIPLY BY 10 HERE (Convert to 10-100 scale)
-            const finalScore = rawScore * 10;
+            const finalScore = rawScore ;
 
             // D. APPLY DISPLAY LOGIC
             const displayName = showRealNames 

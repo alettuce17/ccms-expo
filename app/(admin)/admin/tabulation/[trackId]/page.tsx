@@ -90,7 +90,7 @@ export default function TabulationPage() {
         if (criteriaCount > 0) {
             // HERE: If you want individual judge columns to also be out of 100, multiply by 10 here.
             // Currently set to multiply so the breakdown looks consistent with the total.
-            const scaledJudgeTotal = currentJudgeTotal * 10; 
+            const scaledJudgeTotal = currentJudgeTotal; 
 
             const formattedTotal = parseFloat(scaledJudgeTotal.toFixed(2));
             judgeTotals[judge.judge_id] = formattedTotal;
