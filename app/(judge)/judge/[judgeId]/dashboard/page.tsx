@@ -1,15 +1,19 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation'; // Added useParams
 import { createClient } from '@/lib/supabase';
 import { ChevronRight, CheckCircle, Circle, LogOut, Lock, X, Eye, FileText } from 'lucide-react';
 import type { Participant, Score, Competition, Judge, Criteria } from '@/types/expo';
 
 export default function JudgeDashboard() {
   const router = useRouter();
+  const params = useParams(); // Get ID from URL
   const supabase = createClient();
   
+  // Use the ID from the URL (Fixes the multi-login issue)
+  const judgeId = params.judgeId as string;
+
   // Data State
   const [judge, setJudge] = useState<Judge | null>(null);
   const [competition, setCompetition] = useState<Competition | null>(null);
@@ -21,29 +25,27 @@ export default function JudgeDashboard() {
   const [loading, setLoading] = useState(true);
   const [boothCodeInput, setBoothCodeInput] = useState('');
   const [error, setError] = useState('');
-  
-  // Modal State
   const [viewingParticipant, setViewingParticipant] = useState<Participant | null>(null);
 
   // --- 1. REUSABLE FETCH SCORES ---
-  const fetchMyScores = useCallback(async (judgeId: string) => {
+  const fetchMyScores = useCallback(async (id: string) => {
     const { data: scores } = await supabase
         .from('scores')
         .select('*')
-        .eq('judge_id', judgeId);
+        .eq('judge_id', id);
     
     if (scores) setMyScores(scores);
   }, [supabase]);
 
   useEffect(() => {
     const init = async () => {
-        const storedJudgeId = localStorage.getItem('ccms_judge_id');
-        if (!storedJudgeId) {
+        // Check URL Param instead of LocalStorage
+        if (!judgeId) {
             router.push('/login');
             return;
         }
 
-        const { data: judgeData } = await supabase.from('judges').select('*').eq('judge_id', storedJudgeId).single();
+        const { data: judgeData } = await supabase.from('judges').select('*').eq('judge_id', judgeId).single();
         if (!judgeData) {
             router.push('/login');
             return;
@@ -59,15 +61,15 @@ export default function JudgeDashboard() {
         const { data: critData } = await supabase.from('criteria').select('*').eq('competition_id', judgeData.competition_id).order('criteria_id');
         if (critData) setCriteria(critData);
         
-        await fetchMyScores(storedJudgeId);
+        await fetchMyScores(judgeId);
 
         setLoading(false);
 
         const channel = supabase
-            .channel('dashboard_scores')
+            .channel(`dashboard_scores_${judgeId}`)
             .on('postgres_changes', 
-                { event: '*', schema: 'public', table: 'scores', filter: `judge_id=eq.${storedJudgeId}` }, 
-                () => { fetchMyScores(storedJudgeId); }
+                { event: '*', schema: 'public', table: 'scores', filter: `judge_id=eq.${judgeId}` }, 
+                () => { fetchMyScores(judgeId); }
             )
             .subscribe();
 
@@ -75,12 +77,12 @@ export default function JudgeDashboard() {
     };
 
     init();
-  }, [supabase, router, fetchMyScores]);
+  }, [supabase, router, judgeId, fetchMyScores]);
 
   // Actions
   const handleLogout = () => {
-      localStorage.removeItem('ccms_judge_id');
-      localStorage.removeItem('ccms_judge_name');
+      // Clear the cookie when logging out
+      document.cookie = `ccms-judge-${judgeId}=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
       router.push('/login');
   };
 
@@ -88,7 +90,8 @@ export default function JudgeDashboard() {
     if (!boothCodeInput) return;
     const team = participants.find(p => p.booth_code === boothCodeInput.toUpperCase());
     if (team) {
-        router.push(`/judge/vote/${team.participant_id}`);
+        // Keep the Judge ID in the URL
+        router.push(`/judge/${judgeId}/vote/${team.participant_id}`);
     } else {
         setError('Invalid Code.');
     }
@@ -96,14 +99,9 @@ export default function JudgeDashboard() {
 
   const getStatus = (participantId: number) => {
     const teamScores = myScores.filter(s => s.participant_id === participantId);
-    
-    if (teamScores.length === 0) return 'pending'; // No data
-    
-    // If locked, it is officially completed.
+    if (teamScores.length === 0) return 'pending'; 
     const isLocked = teamScores.some(s => s.is_locked);
     if (isLocked) return 'completed';
-
-    // If we have data but not locked, it's technically "in-progress" (or "partial")
     return 'in-progress';
   };
 
@@ -112,27 +110,20 @@ export default function JudgeDashboard() {
     const status = getStatus(team.participant_id);
     const isVotingClosed = competition?.status !== 'live';
 
-    // 1. If we have ANY data (Completed OR In-Progress), allow viewing Modal
-    if (status === 'completed' || status === 'in-progress') {
-        // If it's Closed, treat In-Progress as "Done" (View Only)
-        // If it's Open, Completed = Modal, In-Progress = Vote Page
-        
-        if (status === 'completed' || (isVotingClosed && status === 'in-progress')) {
-             setViewingParticipant(team);
-             return;
-        }
+    if (status === 'completed' || (isVotingClosed && status === 'in-progress')) {
+         setViewingParticipant(team);
+         return;
     }
 
-    // 2. If Voting is CLOSED and we have NO data, do nothing
     if (isVotingClosed && status === 'pending') return;
 
-    // 3. Otherwise (Voting Open + Pending/In-Progress), go to vote page
-    router.push(`/judge/vote/${team.participant_id}`);
+    // Navigate with Judge ID
+    router.push(`/judge/${judgeId}/vote/${team.participant_id}`);
   };
 
   const handleDirectFullPage = (e: React.MouseEvent, participantId: number) => {
       e.stopPropagation(); 
-      router.push(`/judge/vote/${participantId}`);
+      router.push(`/judge/${judgeId}/vote/${participantId}`);
   };
 
   // --- MODAL HELPERS ---
@@ -141,22 +132,19 @@ export default function JudgeDashboard() {
       return myScores.filter(s => s.participant_id === viewingParticipant.participant_id);
   };
 
-const calculateTotal = () => {
-    const scores = getSelectedTeamScores();
-    let total = 0;
-    criteria.forEach(c => {
-        const s = scores.find(score => score.criteria_id === c.criteria_id);
-        // Standard Weighted Calculation
-        // Example: Score 8 * Weight 50% (0.5) = 4
-        if (s) total += (s.score_value * (c.weight_percentage / 100));
-    });
-    
-    // Scale the result to be out of 100
-    // Example: Total 8.5 (out of 10) * 10 = 85.0 (out of 100)
-    const finalTotal = total * 10;
-
-    return finalTotal.toFixed(1);
-};
+  const calculateTotal = () => {
+      const scores = getSelectedTeamScores();
+      let total = 0;
+      criteria.forEach(c => {
+          const s = scores.find(score => score.criteria_id === c.criteria_id);
+          // Standard Weighted Calculation
+          if (s) total += (s.score_value * (c.weight_percentage / 100));
+      });
+      
+      // --- UPDATE: REMOVED MULTIPLICATION ---
+      // The total is now strictly 1-10 based
+      return total.toFixed(2); // Using 2 decimals for precision (e.g. 8.75)
+  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-500 font-bold">Loading...</div>;
 
@@ -205,76 +193,73 @@ const calculateTotal = () => {
                 <span className="text-xs font-bold text-slate-400 bg-slate-200 px-2 py-1 rounded-full">{participants.length}</span>
             </div>
             
-            {participants.map((team) => {
-                const status = getStatus(team.participant_id);
-                const isVotingClosed = competition?.status !== 'live';
-                
-                // --- VISIBILITY LOGIC ---
-                // Interactable IF: Voting is Live OR I have ANY data (Completed or In-Progress)
-                const hasData = status === 'completed' || status === 'in-progress';
-                const isInteractable = !isVotingClosed || hasData;
+            {participants.length === 0 ? (
+                 <div className="text-center py-10 text-slate-400 font-medium bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                    No teams assigned.
+                 </div>
+            ) : (
+                participants.map((team) => {
+                    const status = getStatus(team.participant_id);
+                    const isVotingClosed = competition?.status !== 'live';
+                    const hasData = status === 'completed' || status === 'in-progress';
+                    const isInteractable = !isVotingClosed || hasData;
 
-                let cardStyle = "border-slate-300 bg-white hover:border-blue-400"; 
-                let statusText = null;
+                    let cardStyle = "border-slate-300 bg-white hover:border-blue-400"; 
+                    let statusText = null;
 
-                if (status === 'completed') {
-                    cardStyle = "border-green-300 bg-green-50/50";
-                    statusText = <span className="text-[10px] font-black text-green-700 uppercase tracking-wide bg-green-200 px-2 py-0.5 rounded-full flex items-center gap-1"><Lock size={10} /> Done</span>;
-                }
-                
-                // If In-Progress, we keep clean style, but maybe show a status if needed.
-                // For now, no specific styling as requested ("remove in progress label"), 
-                // but we keep the logic that it is distinct from 'pending'.
+                    if (status === 'completed') {
+                        cardStyle = "border-green-300 bg-green-50/50";
+                        statusText = <span className="text-[10px] font-black text-green-700 uppercase tracking-wide bg-green-200 px-2 py-0.5 rounded-full flex items-center gap-1"><Lock size={10} /> Done</span>;
+                    }
+                    
+                    if (!isInteractable) {
+                        cardStyle = "border-slate-200 bg-slate-100 opacity-60 cursor-not-allowed";
+                    }
 
-                if (!isInteractable) {
-                    cardStyle = "border-slate-200 bg-slate-100 opacity-60 cursor-not-allowed";
-                }
-
-                return (
-                    <div 
-                        key={team.participant_id}
-                        onClick={() => isInteractable && handleCardClick(team)}
-                        className={`group p-4 rounded-xl border-2 transition-all active:scale-95 cursor-pointer flex items-center justify-between shadow-sm ${cardStyle}`}
-                    >
-                        {/* LEFT: Info */}
-                        <div>
-                            <div className="flex items-center gap-2 mb-1.5">
-                                <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isInteractable ? 'bg-slate-800 text-white' : 'bg-slate-300 text-slate-500'}`}>
-                                    {team.booth_code}
-                                </span>
-                                {statusText}
-                                {isVotingClosed && !hasData && (
-                                    <span className="text-[10px] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1"><Lock size={10} /> Closed</span>
+                    return (
+                        <div 
+                            key={team.participant_id}
+                            onClick={() => isInteractable && handleCardClick(team)}
+                            className={`group p-4 rounded-xl border-2 transition-all active:scale-95 cursor-pointer flex items-center justify-between shadow-sm ${cardStyle}`}
+                        >
+                            {/* LEFT: Info */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isInteractable ? 'bg-slate-800 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                                        {team.booth_code}
+                                    </span>
+                                    {statusText}
+                                    {isVotingClosed && !hasData && (
+                                        <span className="text-[10px] font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1"><Lock size={10} /> Closed</span>
+                                    )}
+                                </div>
+                                <h3 className="font-bold text-slate-900 text-lg leading-tight">{team.real_name}</h3>
+                                <p className="text-xs font-medium text-slate-500 mt-0.5">{team.alias || 'No alias'}</p>
+                            </div>
+                            
+                            {/* RIGHT: Actions */}
+                            <div className="pl-4 flex items-center gap-2">
+                                {status === 'completed' || (isVotingClosed && hasData) ? (
+                                    <>
+                                        <div title="View Summary" className="p-2 bg-white rounded-full text-green-600 shadow-sm border border-green-100 hover:bg-green-50 transition-colors">
+                                            <Eye size={20} />
+                                        </div>
+                                        <button 
+                                            onClick={(e) => handleDirectFullPage(e, team.participant_id)}
+                                            className="p-2 bg-green-600 text-white rounded-full shadow-md hover:bg-green-700 transition-colors z-10"
+                                            title="Open Full Ballot"
+                                        >
+                                            <FileText size={20} />
+                                        </button>
+                                    </>
+                                ) : (
+                                    isInteractable && <ChevronRight size={24} className="text-slate-300 group-hover:text-blue-500" />
                                 )}
                             </div>
-                            <h3 className="font-bold text-slate-900 text-lg leading-tight">{team.real_name}</h3>
-                            <p className="text-xs font-medium text-slate-500 mt-0.5">{team.alias || 'No alias'}</p>
                         </div>
-                        
-                        {/* RIGHT: Actions */}
-                        <div className="pl-4 flex items-center gap-2">
-                            {/* Show Actions if: Completed OR (Closed but has partial Data) */}
-                            {status === 'completed' || (isVotingClosed && hasData) ? (
-                                <>
-                                    <div title="View Summary" className="p-2 bg-white rounded-full text-green-600 shadow-sm border border-green-100 hover:bg-green-50 transition-colors">
-                                        <Eye size={20} />
-                                    </div>
-                                    <button 
-                                        onClick={(e) => handleDirectFullPage(e, team.participant_id)}
-                                        className="p-2 bg-green-600 text-white rounded-full shadow-md hover:bg-green-700 transition-colors z-10"
-                                        title="Open Full Ballot"
-                                    >
-                                        <FileText size={20} />
-                                    </button>
-                                </>
-                            ) : (
-                                // Default Arrow for voting
-                                isInteractable && <ChevronRight size={24} className="text-slate-300 group-hover:text-blue-500" />
-                            )}
-                        </div>
-                    </div>
-                );
-            })}
+                    );
+                })
+            )}
         </div>
       </div>
 
@@ -322,7 +307,7 @@ const calculateTotal = () => {
                         Close
                     </button>
                     <button 
-                        onClick={() => router.push(`/judge/vote/${viewingParticipant.participant_id}`)}
+                        onClick={() => router.push(`/judge/${judgeId}/vote/${viewingParticipant.participant_id}`)}
                         className="py-3 px-4 rounded-xl font-bold bg-slate-900 text-white hover:bg-black transition-colors text-sm flex items-center justify-center gap-2 shadow-lg"
                     >
                         <FileText size={16} /> Full Ballot
