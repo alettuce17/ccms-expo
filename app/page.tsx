@@ -69,7 +69,7 @@ export default function LandingPage() {
     const fetchRoster = async () => {
       setLoading(true);
       const { data } = await supabase
-        .from('participants')
+        .from('participants')   
         .select('participant_id, booth_code, real_name')
         .eq('competition_id', selectedComp.competition_id)
         .order('booth_code');

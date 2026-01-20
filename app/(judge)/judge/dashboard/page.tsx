@@ -141,15 +141,22 @@ export default function JudgeDashboard() {
       return myScores.filter(s => s.participant_id === viewingParticipant.participant_id);
   };
 
-  const calculateTotal = () => {
-      const scores = getSelectedTeamScores();
-      let total = 0;
-      criteria.forEach(c => {
-          const s = scores.find(score => score.criteria_id === c.criteria_id);
-          if (s) total += (s.score_value * (c.weight_percentage / 100));
-      });
-      return total.toFixed(1);
-  };
+const calculateTotal = () => {
+    const scores = getSelectedTeamScores();
+    let total = 0;
+    criteria.forEach(c => {
+        const s = scores.find(score => score.criteria_id === c.criteria_id);
+        // Standard Weighted Calculation
+        // Example: Score 8 * Weight 50% (0.5) = 4
+        if (s) total += (s.score_value * (c.weight_percentage / 100));
+    });
+    
+    // Scale the result to be out of 100
+    // Example: Total 8.5 (out of 10) * 10 = 85.0 (out of 100)
+    const finalTotal = total * 10;
+
+    return finalTotal.toFixed(1);
+};
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-500 font-bold">Loading...</div>;
 

@@ -29,7 +29,6 @@ export default function ScoreboardPage() {
   // 1. Initial Load: Get Tracks
   useEffect(() => {
     const fetchTracks = async () => {
-        // Fetch all tracks regardless of status
         const { data } = await supabase
         .from('competitions')
         .select('*')
@@ -84,22 +83,20 @@ export default function ScoreboardPage() {
                 totalAverage += judgeTotal;
             });
 
-            const finalScore = judgesVoted.size > 0 ? totalAverage / judgesVoted.size : 0;
+            // Calculate raw average (1-10 scale)
+            const rawScore = judgesVoted.size > 0 ? totalAverage / judgesVoted.size : 0;
+            
+            // MULTIPLY BY 10 HERE (Convert to 10-100 scale)
+            const finalScore = rawScore * 10;
 
-            // D. APPLY DISPLAY LOGIC (UPDATED)
-            // ---------------------------------------------------------
-            // 1. Display Name: Use Real Name OR Alias. 
-            // If Alias is missing, fallback to generic "Entry #" (Never Booth Code)
+            // D. APPLY DISPLAY LOGIC
             const displayName = showRealNames 
                 ? team.real_name 
                 : (team.alias || `Entry #${team.participant_id}`);
 
-            // 2. Sub Label: Only show Alias if we are showing Real Names.
-            // Otherwise show NOTHING (Hidden Booth Code).
             const subLabel = showRealNames 
                 ? (team.alias || "") 
                 : ""; 
-            // ---------------------------------------------------------
 
             return {
                 id: team.participant_id,
@@ -118,7 +115,7 @@ export default function ScoreboardPage() {
     };
 
     fetchRankings();
-    const interval = setInterval(fetchRankings, 3000); // Poll every 3s
+    const interval = setInterval(fetchRankings, 3000); 
     return () => clearInterval(interval);
 
   }, [activeTrack]); 
@@ -174,9 +171,7 @@ export default function ScoreboardPage() {
                 const isTop2 = index === 1;
                 const isTop3 = index === 2;
                 
-                // Visual Logic for Ranks
                 let containerClass = "bg-[#0f172a]/40 border-slate-800/50 hover:bg-[#0f172a]/60";
-                let rankColor = "text-slate-500";
                 let scoreColor = "text-slate-400";
                 let rankBadge = <span className="font-mono text-xl font-bold opacity-50">#{team.rank}</span>;
 
@@ -197,18 +192,15 @@ export default function ScoreboardPage() {
                 return (
                     <div key={team.id} className={`flex items-center p-4 md:p-6 rounded-2xl border backdrop-blur-md transition-all duration-500 group ${containerClass}`}>
                         
-                        {/* Rank Badge */}
                         <div className="w-16 md:w-24 flex justify-center shrink-0">
                             {rankBadge}
                         </div>
 
-                        {/* Team Info */}
                         <div className="flex-1 px-4 min-w-0">
                             <h2 className={`font-black text-xl md:text-3xl truncate transition-all duration-300 ${isTop1 ? 'text-white tracking-wide' : 'text-slate-200'}`}>
                                 {team.displayName}
                             </h2>
                             <div className="flex items-center gap-2 mt-1">
-                                {/* Only render subLabel badge if it exists (hidden booth code) */}
                                 {team.subLabel && (
                                     <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isTop1 ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/50' : 'bg-slate-800 text-slate-500'}`}>
                                         {team.subLabel}
@@ -218,7 +210,6 @@ export default function ScoreboardPage() {
                             </div>
                         </div>
 
-                        {/* Score */}
                         <div className="text-right pl-4">
                             <div className="flex items-end justify-end gap-1">
                                 <span className={`text-4xl md:text-5xl font-black tracking-tighter leading-none ${scoreColor}`}>
@@ -229,7 +220,6 @@ export default function ScoreboardPage() {
                             <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest mt-1">Total Average</div>
                         </div>
 
-                        {/* Decorative Line for Top 1 */}
                         {isTop1 && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-cyan-400 shadow-[0_0_15px_cyan]"></div>}
                     </div>
                 );
@@ -243,7 +233,6 @@ export default function ScoreboardPage() {
             )}
         </div>
         
-        {/* Footer */}
         <div className="mt-16 text-center">
             <p className="text-xs text-slate-700 font-mono uppercase">System Optimized for 1920x1080 Viewports</p>
         </div>
