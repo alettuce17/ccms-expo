@@ -37,33 +37,37 @@ export default function LoginPage() {
       router.push('/admin/dashboard');
     }
   };
+// 2. Handle Judge Login (PIN Verification)
+const handleJudgeLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setError('');
 
-  // 2. Handle Judge Login (PIN Verification)
-  const handleJudgeLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  // A. Query the Database
+  const { data: judge, error } = await supabase
+    .from('judges')
+    .select('judge_id, name') // Select only what we need
+    .eq('pin_code', pin)
+    .single();
 
-    // Query the Judges table for this PIN
-    const { data, error } = await supabase
-      .from('judges')
-      .select('*')
-      .eq('pin_code', pin)
-      .single();
+  if (error || !judge) {
+    setError('Invalid PIN Code. Please check your badge.');
+    setLoading(false);
+    return;
+  }
 
-    if (error || !data) {
-      setError('Invalid PIN Code. Please check your badge.');
-      setLoading(false);
-      return;
-    }
+  // --- THE FIX STARTS HERE ---
 
-    // Success: Store judge session (Simple LocalStorage for this demo)
-    // In production, use a secure HTTP-only cookie or Anonymous Auth
-    localStorage.setItem('ccms_judge_id', data.judge_id.toString());
-    localStorage.setItem('ccms_judge_name', data.name);
-    
-    router.push('/judge/dashboard');
-  };
+  // B. Set the Cookie (This is what the Middleware looks for!)
+  // We set a cookie specific to this Judge ID so multiple tabs don't conflict
+  document.cookie = `ccms-judge-${judge.judge_id}=true; path=/; max-age=86400; SameSite=Lax`;
+
+  // C. Redirect to the Dynamic URL
+  // We send them to their specific room: /judge/[judge_id]/dashboard
+  router.push(`/judge/${judge.judge_id}/dashboard`);
+  
+  // Note: We don't set loading(false) here because the page is navigating away.
+};
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
