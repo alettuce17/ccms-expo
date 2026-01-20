@@ -22,6 +22,7 @@ type Participant = {
 export default function LandingPage() {
   const router = useRouter();
   const supabase = createClient();
+const currentYear = new Date().getFullYear();
 
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [selectedComp, setSelectedComp] = useState<Competition | null>(null);
@@ -144,7 +145,7 @@ export default function LandingPage() {
             ) : (
                 <div className="text-slate-500 text-sm">No live events at the moment.</div>
             )}
-            <span className="text-slate-400">2025</span>
+<span className="text-slate-400">{currentYear}</span>
           </div>
         </div>
 
