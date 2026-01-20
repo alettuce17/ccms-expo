@@ -80,6 +80,7 @@ export default function TabulationPage() {
         criteria.forEach((crit) => {
           const scoreEntry = teamScores.find((s) => s.judge_id === judge.judge_id && s.criteria_id === crit.criteria_id);
           if (scoreEntry) {
+            // Weighted calculation (base score 1-10)
             currentJudgeTotal += (scoreEntry.score_value * crit.weight_percentage) / 100;
             criteriaCount++;
             if (scoreEntry.unlock_request) hasPendingRequest = true;
@@ -87,7 +88,11 @@ export default function TabulationPage() {
         });
 
         if (criteriaCount > 0) {
-            const formattedTotal = parseFloat(currentJudgeTotal.toFixed(2));
+            // HERE: If you want individual judge columns to also be out of 100, multiply by 10 here.
+            // Currently set to multiply so the breakdown looks consistent with the total.
+            const scaledJudgeTotal = currentJudgeTotal * 10; 
+
+            const formattedTotal = parseFloat(scaledJudgeTotal.toFixed(2));
             judgeTotals[judge.judge_id] = formattedTotal;
             judgeRequests[judge.judge_id] = hasPendingRequest;
             judgeRawValues.push(formattedTotal);
@@ -96,6 +101,8 @@ export default function TabulationPage() {
 
       const validJudgeCount = judgeRawValues.length;
       const sum = judgeRawValues.reduce((a, b) => a + b, 0);
+      
+      // Calculate Average (which is already scaled to 100 because judgeRawValues are scaled)
       const finalAvg = validJudgeCount > 0 ? sum / validJudgeCount : 0;
       
       return {
@@ -143,10 +150,12 @@ export default function TabulationPage() {
     }
   };
 
-  // 4. Handle Cell Click
+  // 4. Handle Cell Click (Breakdown Modal)
   const handleCellClick = (judge: Judge, participant: Participant, totalScore: number) => {
      let requestActive = false;
      let lockedState = false;
+     
+     // Note: Breakdown values here are raw (1-10) from database
      const breakdown = criteria.map(c => {
          const s = scores.find(s => s.judge_id === judge.judge_id && s.participant_id === participant.participant_id && s.criteria_id === c.criteria_id);
          if (s?.unlock_request) requestActive = true;
@@ -157,14 +166,13 @@ export default function TabulationPage() {
      setSelectedCell({ 
          judge, 
          participant, 
-         scoreTotal: totalScore, 
+         scoreTotal: totalScore, // This will be the scaled (out of 100) score passed from the clicked cell
          breakdown, 
          hasRequest: requestActive,
          isLocked: lockedState
     });
   };
 
-  // UPDATED: Now passes all raw data for detailed breakdown
   const handleExport = () => {
     generateExpoExcel(matrix, judges, criteria, scores, "Detailed_Results");
   };
@@ -230,7 +238,7 @@ export default function TabulationPage() {
               {matrix.map((row, index) => (
                 <tr key={row.participant.participant_id} className={`group hover:bg-white/5 transition-colors ${index === 0 ? 'bg-cyan-950/20' : ''}`}>
                   
-                  {/* RANK - Winner Highlights */}
+                  {/* RANK */}
                   <td className="px-4 py-4 font-black text-center sticky left-0 bg-[#050b14] group-hover:bg-[#0f172a] z-30 border-r border-white/5 transition-colors">
                     {index === 0 ? (
                         <div className="flex flex-col items-center animate-in zoom-in duration-500">
@@ -337,11 +345,12 @@ export default function TabulationPage() {
                           {selectedCell.breakdown.map((b, i) => (
                               <div key={i} className="flex justify-between text-sm items-center">
                                   <span className="text-slate-400 font-medium">{b.name}</span>
+                                  {/* Showing RAW Score (1-10) in breakdown as requested */}
                                   <span className="font-mono font-bold text-cyan-300">{b.value}</span>
                               </div>
                           ))}
                           <div className="border-t border-white/10 pt-3 flex justify-between font-black text-white text-lg">
-                              <span>TOTAL</span>
+                              <span>TOTAL (Scaled)</span>
                               <span className="text-cyan-400">{selectedCell.scoreTotal}</span>
                           </div>
                       </div>
