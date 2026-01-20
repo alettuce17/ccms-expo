@@ -1,4 +1,3 @@
-// DIRECTORY LOCATION: app/(public)/login/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -19,7 +18,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
 
-  // 1. Handle Admin Login (Supabase Auth)
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -37,37 +35,33 @@ export default function LoginPage() {
       router.push('/admin/dashboard');
     }
   };
-// 2. Handle Judge Login (PIN Verification)
-const handleJudgeLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
 
-  // A. Query the Database
-  const { data: judge, error } = await supabase
-    .from('judges')
-    .select('judge_id, name') // Select only what we need
-    .eq('pin_code', pin)
-    .single();
+  const handleJudgeLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-  if (error || !judge) {
-    setError('Invalid PIN Code. Please check your badge.');
-    setLoading(false);
-    return;
-  }
+    // 1. Verify PIN
+    const { data: judge, error } = await supabase
+      .from('judges')
+      .select('judge_id, name')
+      .eq('pin_code', pin)
+      .single();
 
-  // --- THE FIX STARTS HERE ---
+    if (error || !judge) {
+      setError('Invalid PIN Code.');
+      setLoading(false);
+      return;
+    }
 
-  // B. Set the Cookie (This is what the Middleware looks for!)
-  // We set a cookie specific to this Judge ID so multiple tabs don't conflict
-  document.cookie = `ccms-judge-${judge.judge_id}=true; path=/; max-age=86400; SameSite=Lax`;
+    // 2. SET COOKIE (Crucial Step for Middleware)
+    // We create a specific cookie for this judge ID
+    document.cookie = `ccms-judge-${judge.judge_id}=true; path=/; max-age=86400; SameSite=Lax`;
 
-  // C. Redirect to the Dynamic URL
-  // We send them to their specific room: /judge/[judge_id]/dashboard
-  router.push(`/judge/${judge.judge_id}/dashboard`);
-  
-  // Note: We don't set loading(false) here because the page is navigating away.
-};
+    // 3. Navigate to Dynamic Route
+    // This allows multiple judges to be logged in on different tabs
+    router.push(`/judge/${judge.judge_id}/dashboard`);
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
