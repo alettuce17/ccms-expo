@@ -11,9 +11,10 @@ export default function VotingPage() {
   const router = useRouter();
   const supabase = createClient();
   
-  // Get both IDs from the URL
+  // 1. GET IDS FROM URL
+  // We grab both IDs. 'judgeId' comes from the folder name [judgeId]
   const participantId = params.participantId as string;
-  const judgeId = params.judgeId as string; // Matches folder [judgeId]
+  const judgeId = params.judgeId as string; 
 
   // State
   const [participant, setParticipant] = useState<Participant | null>(null);
@@ -23,7 +24,7 @@ export default function VotingPage() {
   const [loading, setLoading] = useState(true);
   const [competitionStatus, setCompetitionStatus] = useState<'setup' | 'live' | 'ended'>('setup');
 
-  // 1. Load Data
+  // --- LOAD DATA ---
   useEffect(() => {
     const loadForm = async () => {
         if (!participantId || !judgeId) return;
@@ -58,11 +59,11 @@ export default function VotingPage() {
             
             if (cData) setCriteria(cData);
 
-            // Fetch Existing Scores (Using URL judgeId instead of localStorage)
+            // Fetch Existing Scores (FIXED: Use URL ID, not LocalStorage)
             const { data: existingScores } = await supabase
                 .from('scores')
                 .select('criteria_id, score_value')
-                .eq('judge_id', judgeId) // <--- UPDATED
+                .eq('judge_id', judgeId) // <--- Using param
                 .eq('participant_id', participantId);
             
             if (existingScores && existingScores.length > 0) {
@@ -78,7 +79,7 @@ export default function VotingPage() {
     loadForm();
   }, [participantId, judgeId, supabase]);
 
-  // 2. Handle Score Change
+  // --- HANDLERS ---
   const handleScoreChange = (criteriaId: number, value: number) => {
     if (competitionStatus !== 'live') return;
     const clamped = Math.min(100, Math.max(0, value));
@@ -91,7 +92,6 @@ export default function VotingPage() {
     setVotes(prev => ({ ...prev, [criteriaId]: score }));
   };
 
-  // 3. Submit Scores
   const handleSubmit = async () => {
     if (!participant) return;
     
@@ -102,7 +102,7 @@ export default function VotingPage() {
 
     setSubmitting(true);
 
-    // Using URL judgeId instead of localStorage
+    // FIXED: Check URL ID instead of LocalStorage
     if (!judgeId) {
         alert("Session Error: Missing Judge ID.");
         router.push('/login');
@@ -111,7 +111,7 @@ export default function VotingPage() {
 
     const payload = criteria.map(crit => ({
         competition_id: participant.competition_id,
-        judge_id: parseInt(judgeId), // <--- UPDATED
+        judge_id: parseInt(judgeId), // <--- Using param
         participant_id: participant.participant_id,
         criteria_id: crit.criteria_id,
         score_value: votes[crit.criteria_id] || 0,
@@ -125,8 +125,8 @@ export default function VotingPage() {
         alert('Error saving score: ' + error.message);
         setSubmitting(false);
     } else {
-        // Redirect back to the specific dashboard
-        router.push(`/judge/${judgeId}/dashboard`); // <--- UPDATED
+        // FIXED: Return to the specific dashboard for this judge
+        router.push(`/judge/${judgeId}/dashboard`);
     }
   };
 
