@@ -1,16 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation'; // useParams gets BOTH IDs now
 import { createClient } from '@/lib/supabase';
-import { Save, ArrowLeft, AlertCircle, Lock } from 'lucide-react';
+import { Save, ArrowLeft, Lock } from 'lucide-react';
 import type { Participant, Criteria } from '@/types/expo';
 
 export default function VotingPage() {
   const params = useParams();
   const router = useRouter();
   const supabase = createClient();
-  const participantId = params.participantId;
+  
+  // Get both IDs from the URL
+  const participantId = params.participantId as string;
+  const judgeId = params.judgeId as string; // Matches folder [judgeId]
 
   // State
   const [participant, setParticipant] = useState<Participant | null>(null);
@@ -23,7 +26,7 @@ export default function VotingPage() {
   // 1. Load Data
   useEffect(() => {
     const loadForm = async () => {
-        if (!participantId) return;
+        if (!participantId || !judgeId) return;
 
         // Fetch Participant
         const { data: pData } = await supabase
@@ -46,7 +49,7 @@ export default function VotingPage() {
                 setCompetitionStatus(cStatus.status);
             }
 
-            // Fetch Criteria (select * automatically gets 'description')
+            // Fetch Criteria
             const { data: cData } = await supabase
                 .from('criteria')
                 .select('*')
@@ -55,28 +58,25 @@ export default function VotingPage() {
             
             if (cData) setCriteria(cData);
 
-            // Fetch Existing Scores (Load Edit Mode)
-            const storedJudgeId = localStorage.getItem('ccms_judge_id');
-            if (storedJudgeId) {
-                const { data: existingScores } = await supabase
-                    .from('scores')
-                    .select('criteria_id, score_value')
-                    .eq('judge_id', storedJudgeId)
-                    .eq('participant_id', participantId);
-                
-                if (existingScores && existingScores.length > 0) {
-                    const loadedVotes: Record<number, number> = {};
-                    existingScores.forEach(s => {
-                        loadedVotes[s.criteria_id] = s.score_value;
-                    });
-                    setVotes(loadedVotes);
-                }
+            // Fetch Existing Scores (Using URL judgeId instead of localStorage)
+            const { data: existingScores } = await supabase
+                .from('scores')
+                .select('criteria_id, score_value')
+                .eq('judge_id', judgeId) // <--- UPDATED
+                .eq('participant_id', participantId);
+            
+            if (existingScores && existingScores.length > 0) {
+                const loadedVotes: Record<number, number> = {};
+                existingScores.forEach(s => {
+                    loadedVotes[s.criteria_id] = s.score_value;
+                });
+                setVotes(loadedVotes);
             }
         }
         setLoading(false);
     };
     loadForm();
-  }, [participantId]);
+  }, [participantId, judgeId, supabase]);
 
   // 2. Handle Score Change
   const handleScoreChange = (criteriaId: number, value: number) => {
@@ -85,7 +85,6 @@ export default function VotingPage() {
     setVotes(prev => ({ ...prev, [criteriaId]: clamped }));
   };
 
-  // Helper for Likert
   const handleLikertChange = (criteriaId: number, scale: number) => {
     if (competitionStatus !== 'live') return;
     const score = scale * 20; 
@@ -102,18 +101,17 @@ export default function VotingPage() {
     }
 
     setSubmitting(true);
-    const storedJudgeId = localStorage.getItem('ccms_judge_id');
 
-    if (!storedJudgeId) {
-        alert("Session Error: You are not logged in as a judge.");
+    // Using URL judgeId instead of localStorage
+    if (!judgeId) {
+        alert("Session Error: Missing Judge ID.");
         router.push('/login');
         return;
     }
 
-    const realJudgeId = parseInt(storedJudgeId);
     const payload = criteria.map(crit => ({
         competition_id: participant.competition_id,
-        judge_id: realJudgeId,
+        judge_id: parseInt(judgeId), // <--- UPDATED
         participant_id: participant.participant_id,
         criteria_id: crit.criteria_id,
         score_value: votes[crit.criteria_id] || 0,
@@ -127,7 +125,8 @@ export default function VotingPage() {
         alert('Error saving score: ' + error.message);
         setSubmitting(false);
     } else {
-        router.push('/judge/dashboard');
+        // Redirect back to the specific dashboard
+        router.push(`/judge/${judgeId}/dashboard`); // <--- UPDATED
     }
   };
 
@@ -260,9 +259,6 @@ export default function VotingPage() {
                 );
             })}
         </div>
-        
-        {/* Note: The 'autosaved locally' banner has been removed here. */}
-
       </div>
 
       {/* Floating Bottom Bar */}
