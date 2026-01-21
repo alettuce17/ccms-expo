@@ -108,8 +108,7 @@ const currentYear = new Date().getFullYear();
               College Of Computing and Multimedia Studies
             </h2>
             <h2 className="text-2xl md:text-3xl font-bold text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
-              
-              2nd
+              3rd
             </h2>
             
             {/* Main Title */}
@@ -121,7 +120,9 @@ const currentYear = new Date().getFullYear();
             <h2 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-cyan-400 tracking-tighter uppercase -mt-4">
               EXHIBIT
             </h2>
-            
+              <h2 className="text-1xl md:text-1xl font text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
+              Special Edition
+            </h2>
           </div>
 
           {/* DYNAMIC EVENT SELECTOR */}

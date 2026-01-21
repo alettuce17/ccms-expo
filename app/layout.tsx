@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 // --- CHANGE THIS SECTION ---
 export const metadata: Metadata = {
-  title: "CCMS Expo System",
+  title: "3rd IOT Exhibit - Special Edition ",
   description: "Official Tabulation and Scoring System for the College of Computing & Multimedia Studies",
   icons: {
     icon: '/icon.jpg', // Optional: explicitly point to an icon if Next.js auto-detection fails
